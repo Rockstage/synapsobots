@@ -3,6 +3,9 @@ const { Client, Events, GatewayIntentBits, Collection, DiscordAPIError, Permissi
 const dotenv = require('dotenv');
 const fs = require('node:fs');
 const path = require('node:path');
+const cheerio = require('cheerio');
+const axios = require('axios');
+const puppeteer = require('puppeteer');
 
 dotenv.config();
 
@@ -46,9 +49,9 @@ const token = DISCORD_BOT_TOKEN;
 const rest = new REST({ version: '9' }).setToken(token);
 
 // WARNING: Use to delete app registered commands
-// rest.put(Routes.applicationCommands(clientId), { body: [] })
-// 	.then(() => console.log('Successfully deleted all application commands.'))
-// 	.catch(console.error);
+rest.put(Routes.applicationCommands(clientId), { body: [] })
+	.then(() => console.log('Successfully deleted all application commands.'))
+	.catch(console.error);
 
 (async () => {
     try {
@@ -65,8 +68,55 @@ const rest = new REST({ version: '9' }).setToken(token);
     }
 })();
 
+// Scrape
+async function scrapeWebpage(url) {
+    try {
+        const browser = await puppeteer.launch();
+        const page = await browser.newPage();
+
+        await page.goto(url, { waitUntil: 'networkidle2' });
+
+        const content = await page.evaluate((url) => {
+            console.log("url test: ", url);
+            if (url.includes("notion")) {
+                return document.querySelector('.notion-page-content').innerText;
+            }
+            return document.querySelector('body').innerText;
+        }, url);
+
+        await browser.close();
+        return content;
+    } catch (error) {
+        console.error(`Error fetching webpage: ${error.message}`);
+        return null;
+    }
+}
+
 // Generate GPT Prompt based on conversation history, user message, and channel topic
 const generatePrompt = async (channel, userMessage) => {
+
+    // Set GPT System Prompt as channel topic's text or scraped link
+    let systemPrompt = channel.topic;
+    const link = channel.topic.match(/(https?:\/\/[^\s]+)/g) || null;
+    if (link) {
+        try {
+            sendMessage(channel, "Synapses seeking...");
+            const scrapedContent = await scrapeWebpage(link[0]);
+            systemPrompt = scrapedContent;
+        } catch (error) {
+            console.error('Invalid URL:', error.message);
+            await channel.messages.fetch({ limit: 1 }).then(messages => {
+                const lastMessage = messages.first();
+                deleteMessage(lastMessage);
+            });
+            sendMessage(channel, "Scraping failed for <" + link[0] + ">...");
+        }
+        await channel.messages.fetch({ limit: 1 }).then(messages => {
+            const lastMessage = messages.first();
+            deleteMessage(lastMessage);
+        });
+    }
+
     // Get conversation history from channel
     const fetchedMessages = await channel.messages.fetch({ limit: 10 });
 
@@ -82,13 +132,14 @@ const generatePrompt = async (channel, userMessage) => {
     conversation.push(
         {
             role: 'system',
-            content: channel.topic,
+            content: systemPrompt,
         },
         {
             role: 'user',
             content: userMessage,
         }
     );
+    console.log("conversation2 ", conversation);
     return conversation
 };
 
@@ -159,6 +210,7 @@ async function deleteMessage(message) {
 client.on('messageCreate', async message => {
     // Ignore messages from bot
     if (message.author.bot) return;
+    console.log("User Message:", message.content);
   
     // Send user message and channel to OpenAI
     const { channel, content } = message;
@@ -200,7 +252,7 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isCommand()) return;
 
     // TODO: If bot doesn't have view channel permission, return;
-    console.log("Interaction: ", interaction);
+    // console.log("Interaction: ", interaction);
     // const botPermissions = interaction.channel.permissionsFor(client.user);
     // console.log("Bot Permissions: ", botPermissions.has(PermissionsBitField.Flags.ViewChannel));
     // if (!botPermissions.has(PermissionsBitField.Flags.ViewChannel)) return;
