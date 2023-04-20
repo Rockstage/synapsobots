@@ -1,8 +1,8 @@
 const { Configuration, OpenAIApi } = require('openai');
 const { Client, Events, GatewayIntentBits, Collection, DiscordAPIError, PermissionsBitField } = require('discord.js');
-const axios = require('axios');
 const dotenv = require('dotenv');
-const fs = require('fs');
+const fs = require('node:fs');
+const path = require('node:path');
 
 dotenv.config();
 
@@ -18,15 +18,25 @@ const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
-// Handle Commands
+// Import Commands from commands folder
 client.commands = new Collection();
-const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
+
+const commandsPath = path.join(__dirname, 'commands');
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
 for (const file of commandFiles) {
-    const command = require(`./commands/${file}`);
-    client.commands.set(command.data.name, command);
+	const filePath = path.join(commandsPath, file);
+	const command = require(filePath);
+	// Set a new item in the Collection with the key as the command name and the value as the exported module
+	if ('data' in command && 'execute' in command) {
+		client.commands.set(command.data.name, command);
+	} else {
+		console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
+	}
 }
 
+
+// Register Commands with Discord Server via Rest API - move to separate file later
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
 const clientId = DISCORD_APPLICATION_ID;
@@ -35,12 +45,17 @@ const token = DISCORD_BOT_TOKEN;
 
 const rest = new REST({ version: '9' }).setToken(token);
 
+// WARNING: Use to delete app registered commands
+// rest.put(Routes.applicationCommands(clientId), { body: [] })
+// 	.then(() => console.log('Successfully deleted all application commands.'))
+// 	.catch(console.error);
+
 (async () => {
     try {
         console.log('Started refreshing application (/) commands.');
 
         await rest.put(
-            Routes.applicationGuildCommands(clientId, guildId),
+            Routes.applicationCommands(clientId), // no guideId enables commands to be run on any server where the bot has the applications.commands permission
             { body: client.commands.map(({ data }) => data.toJSON()) },
         );
 
@@ -50,8 +65,7 @@ const rest = new REST({ version: '9' }).setToken(token);
     }
 })();
 
-const conversationHistory = new Map();
-
+// Generate GPT Prompt based on conversation history, user message, and channel topic
 const generatePrompt = async (channel, userMessage) => {
     // Get conversation history from channel
     const fetchedMessages = await channel.messages.fetch({ limit: 10 });
@@ -82,6 +96,7 @@ client.once(Events.ClientReady, c => {
     console.log('Ready! Logged in as ' + c.user.tag); // SynapsoBots#3788
 });
 
+// Handle GPT Request and Response
 async function gptResponse(prompt) {
     const openai = new OpenAIApi(openAiConfig);
     try {
@@ -139,8 +154,8 @@ async function deleteMessage(message) {
         }
       }
 }
-module.exports = { deleteMessage }
 
+// Discord Message Event Listener
 client.on('messageCreate', async message => {
     // Ignore messages from bot
     if (message.author.bot) return;
@@ -149,7 +164,7 @@ client.on('messageCreate', async message => {
     const { channel, content } = message;
     try {
       const prompt = await generatePrompt(channel, content);
-      sendMessage(channel, "Stretching my synapses...");
+      sendMessage(channel, "Synapses tingling...");
       const response = await gptResponse(prompt);
   
       await message.channel.messages.fetch({ limit: 1 }).then(messages => {
@@ -180,30 +195,31 @@ client.on('messageCreate', async message => {
     }
 });
 
-// use discord.js slash command to clear all channel messages
+// Discord Commands Event Listener
 client.on('interactionCreate', async interaction => {
     if (!interaction.isCommand()) return;
 
     // TODO: If bot doesn't have view channel permission, return;
-    // console.log("Interaction: ", interaction);
+    console.log("Interaction: ", interaction);
     // const botPermissions = interaction.channel.permissionsFor(client.user);
     // console.log("Bot Permissions: ", botPermissions.has(PermissionsBitField.Flags.ViewChannel));
     // if (!botPermissions.has(PermissionsBitField.Flags.ViewChannel)) return;
 
-    console.log(`Received command: ${interaction.commandName}`); // Add this line for logging
-
     const command = client.commands.get(interaction.commandName);
+    console.log(`Received command: ${interaction.commandName}`);
 
     if (!command) return;
 
     try {
-        // await interaction.reply({ content: "Executing command...", ephemeral: true, fetchReply: true });
-        await command.execute(interaction);
-    } catch (error) {
-        console.error(error);
-        return;
-        // await interaction.editReply({ content: 'There was an error while executing this command!', ephemeral: true });
-    }
+		await command.execute(interaction);
+	} catch (error) {
+		console.error(error);
+		if (interaction.replied || interaction.deferred) {
+			await interaction.followUp({ content: 'There was an error while executing this command!', ephemeral: true });
+		} else {
+			await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+		}
+	}
 });
 
 client.login(DISCORD_BOT_TOKEN);
