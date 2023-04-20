@@ -77,7 +77,6 @@ async function scrapeWebpage(url) {
         await page.goto(url, { waitUntil: 'networkidle2' });
 
         const content = await page.evaluate((url) => {
-            console.log("url test: ", url);
             if (url.includes("notion")) {
                 return document.querySelector('.notion-page-content').innerText;
             }
@@ -139,7 +138,6 @@ const generatePrompt = async (channel, userMessage) => {
             content: userMessage,
         }
     );
-    console.log("conversation2 ", conversation);
     return conversation
 };
 
@@ -210,7 +208,6 @@ async function deleteMessage(message) {
 client.on('messageCreate', async message => {
     // Ignore messages from bot
     if (message.author.bot) return;
-    console.log("User Message:", message.content);
   
     // Send user message and channel to OpenAI
     const { channel, content } = message;
@@ -258,7 +255,6 @@ client.on('interactionCreate', async interaction => {
     // if (!botPermissions.has(PermissionsBitField.Flags.ViewChannel)) return;
 
     const command = client.commands.get(interaction.commandName);
-    console.log(`Received command: ${interaction.commandName}`);
 
     if (!command) return;
 
