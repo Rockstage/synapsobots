@@ -49,9 +49,12 @@ const token = DISCORD_BOT_TOKEN;
 const rest = new REST({ version: '9' }).setToken(token);
 
 // WARNING: Use to delete app registered commands
-rest.put(Routes.applicationCommands(clientId), { body: [] })
-	.then(() => console.log('Successfully deleted all application commands.'))
-	.catch(console.error);
+// rest.put(Routes.applicationCommands(clientId), { body: [] })
+// 	.then(() => console.log('Successfully deleted all application commands.'))
+// 	.catch(console.error);
+// rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: [] })
+// 	.then(() => console.log('Successfully deleted all application commands.'))
+// 	.catch(console.error);
 
 (async () => {
     try {
@@ -95,9 +98,10 @@ async function scrapeWebpage(url) {
 const generatePrompt = async (channel, userMessage) => {
 
     // Set GPT System Prompt as channel topic's text or scraped link
-    let systemPrompt = channel.topic;
-    const link = channel.topic.match(/(https?:\/\/[^\s]+)/g) || null;
-    if (link) {
+    let systemPrompt = channel.topic || 'You are a helpful assistant.';
+    let link;
+    if (channel.topic && channel.topic.match(/(https?:\/\/[^\s]+)/g)) {
+        link = channel.topic.match(/(https?:\/\/[^\s]+)/g);
         try {
             sendMessage(channel, "Synapses seeking...");
             const scrapedContent = await scrapeWebpage(link[0]);
@@ -158,7 +162,8 @@ async function gptResponse(prompt) {
         return response.data.choices[0].message.content;
     } catch (error) {
         console.log("OpenAI Api Error", error.response.data.error.message);
-        throw error
+        return "My synapses misfired... Please try again."
+        // throw error
     }
 }
 
@@ -236,6 +241,7 @@ client.on('messageCreate', async message => {
       }
     } catch (error) {
       if (error instanceof DiscordAPIError && error.code === 50013) {
+        console.log("Permissions error: ", error);
         return;
       } else if (error instanceof DiscordAPIError) {
         console.log("Discord API Error", error);
