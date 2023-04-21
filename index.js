@@ -74,7 +74,10 @@ const rest = new REST({ version: '9' }).setToken(token);
 // Scrape
 async function scrapeWebpage(url) {
     try {
-        const browser = await puppeteer.launch();
+        const browser = await puppeteer.launch({
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            executablePath: process.env.CHROME_BIN || null,
+        });
         const page = await browser.newPage();
 
         await page.goto(url, { waitUntil: 'networkidle2' });
@@ -145,8 +148,11 @@ const generatePrompt = async (channel, userMessage) => {
     return conversation
 };
 
+let isConnectedToDiscord = false;
+
 client.once(Events.ClientReady, c => {
     console.log('Ready! Logged in as ' + c.user.tag); // SynapsoBots#3788
+    isConnectedToDiscord = true;
 });
 
 // Handle GPT Request and Response
@@ -213,6 +219,8 @@ async function deleteMessage(message) {
 client.on('messageCreate', async message => {
     // Ignore messages from bot
     if (message.author.bot) return;
+
+    console.log("User Message: ", message.content);
 
     const { channel, content } = message;
 
