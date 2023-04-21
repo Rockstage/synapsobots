@@ -5,8 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js",
-    "heroku-postbuild": "npm install puppeteer"
+    "start": "node index.js"
   },
   "author": "George Petrov",
   "license": "ISC",
@@ -20,6 +19,6 @@
     "dotenv": "^16.0.3",
     "fs": "^0.0.1-security",
     "openai": "^3.2.1",
-    "puppeteer": "^19.10.1"
+    "puppeteer": "^18.2.1"
   }
 }
