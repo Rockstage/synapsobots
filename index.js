@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const cheerio = require('cheerio');
 const axios = require('axios');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
 
 dotenv.config();
 
