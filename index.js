@@ -75,8 +75,13 @@ const rest = new REST({ version: '9' }).setToken(token);
 async function scrapeWebpage(url) {
     try {
         const browser = await puppeteer.launch({
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-            executablePath: process.env.CHROME_BIN || null,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--single-process'
+              ],
+              executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
         });
         const page = await browser.newPage();
 
