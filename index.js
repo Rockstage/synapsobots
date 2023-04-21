@@ -189,7 +189,7 @@ async function sendMessage(channel, content) {
     try {
         await channel.send(content);
       } catch (error) {
-        if (error instanceof DiscordAPIError && error.code === 50013) {
+        if (error instanceof DiscordAPIError && (error.code === 50013 || error.code === 50001)) {
           return
         } else {
           console.error("An error occurred while sending a message:", error);
@@ -201,7 +201,7 @@ async function deleteMessage(message) {
     try {
         await message.delete();
       } catch (error) {
-        if (error instanceof DiscordAPIError && error.code === 50013) {
+        if (error instanceof DiscordAPIError && (error.code === 50013 || error.code === 50001)) {
           return
         } else {
           console.error("An error occurred while deleting a message:", error);
@@ -213,9 +213,9 @@ async function deleteMessage(message) {
 client.on('messageCreate', async message => {
     // Ignore messages from bot
     if (message.author.bot) return;
-  
-    // Send user message and channel to OpenAI
+
     const { channel, content } = message;
+
     try {
       const prompt = await generatePrompt(channel, content);
       sendMessage(channel, "Synapses tingling...");
@@ -240,7 +240,7 @@ client.on('messageCreate', async message => {
         sendMessage(channel, response);
       }
     } catch (error) {
-      if (error instanceof DiscordAPIError && error.code === 50013) {
+      if (error instanceof DiscordAPIError &&  (error.code === 50013 || error.code === 50001)) {
         console.log("Permissions error: ", error);
         return;
       } else if (error instanceof DiscordAPIError) {
@@ -253,12 +253,6 @@ client.on('messageCreate', async message => {
 // Discord Commands Event Listener
 client.on('interactionCreate', async interaction => {
     if (!interaction.isCommand()) return;
-
-    // TODO: If bot doesn't have view channel permission, return;
-    // console.log("Interaction: ", interaction);
-    // const botPermissions = interaction.channel.permissionsFor(client.user);
-    // console.log("Bot Permissions: ", botPermissions.has(PermissionsBitField.Flags.ViewChannel));
-    // if (!botPermissions.has(PermissionsBitField.Flags.ViewChannel)) return;
 
     const command = client.commands.get(interaction.commandName);
 

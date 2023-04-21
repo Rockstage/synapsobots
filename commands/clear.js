@@ -9,7 +9,7 @@ module.exports = {
     // permissions: ['MANAGE_MESSAGES'],
     async execute(interaction) {
         const { channel } = interaction;
-        if(!interaction.memberPermissions.has(PermissionsBitField.Flags.SendMessages)) return;
+        // if(!interaction.memberPermissions.has(PermissionsBitField.Flags.UseApplicationCommands)) return;
         await interaction.reply({ content: "Clearing messages...", ephemeral: true, fetchReply: true });
 
         // Delete one by one
@@ -43,8 +43,13 @@ module.exports = {
             await channel.bulkDelete(messagesToDelete);
             await interaction.editReply({ content: `Cleared ${messagesToDelete.size} messages`, ephemeral: true });
         } catch (error) {
-            console.log("Error while clearing messages:", error); // Update this line for better logging
-            interaction.editReply({ content: "Error while clearing messages", ephemeral: true });
+            if (error.code === 50013 || error.code === 50001) { // Permission Error
+                interaction.editReply({ content: "I don't have the permission to clear messages.", ephemeral: true });
+                return;
+            } else {
+                console.log("Error while clearing messages:", error); // Update this line for better logging
+                interaction.editReply({ content: "Error while clearing messages", ephemeral: true });
+            }
         }
     },
 };
