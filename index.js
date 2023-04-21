@@ -102,7 +102,7 @@ async function scrapeWebpage(url) {
     }
 }
 
-// Generate GPT Prompt based on conversation history, user message, and channel topic
+// Generate GPT Prompt based on conversation history, user message, and channel topic 
 const generatePrompt = async (channel, userMessage) => {
 
     // Set GPT System Prompt as channel topic's text or scraped link
