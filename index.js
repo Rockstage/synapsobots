@@ -206,7 +206,7 @@ async function gptStreamingResponse(prompt, message) {
         const delta = part.choices[0].delta;
         if (delta && delta.content !== undefined) {
           currentSentence += delta.content;
-          console.log("Delta content:", delta.content);
+          // console.log("Delta content:", delta.content);
 
           if (stream.controller.signal.aborted) {
             console.log("Stream aborted");
@@ -230,8 +230,6 @@ async function gptStreamingResponse(prompt, message) {
               await sendMessage(message.channel, completeSentence);
             }
           }
-        } else {
-          console.log("Delta content is undefined");
         }
       } else {
         console.log("Unexpected part structure:", part);
@@ -368,7 +366,9 @@ client.on("messageCreate", async (message) => {
   // Ignore messages from bot
   if (message.author.bot) return;
 
-  console.log("User Message: ", message.content);
+  if (process.env.NODE_ENV === "development") {
+    console.log("User Message: ", message.content);
+  }
 
   const { channel, content } = message;
 
