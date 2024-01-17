@@ -4,8 +4,8 @@ const { MessageEmbed, EmbedBuilder, PermissionsBitField, PermissionFlagsBits } =
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('clear')
-        .setDescription('Clears all messages in the channel, except pinned')
-        .setDefaultMemberPermissions(PermissionFlagsBits.ViewChannel),
+        .setDescription('Clears all messages in the channel up to 14 days old, except pinned.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
     // permissions: ['MANAGE_MESSAGES'],
     async execute(interaction) {
         const { channel } = interaction;
