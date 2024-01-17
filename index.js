@@ -180,12 +180,21 @@ async function gptStreamingResponse(prompt, message) {
       let sentences = [];
       let currentSentence = "";
       const sentenceEndRegex = /[.!?](?=["']?$|\s*$)/;
+
+      // Set the activeStreamController on the client object
+      client.activeStreamController = stream.controller;
+
       for await (const part of stream) {
         if (part.choices && part.choices.length > 0 && part.choices[0].hasOwnProperty('delta')) {
             const delta = part.choices[0].delta;
             if (delta && delta.content !== undefined) {
                 currentSentence += delta.content;
                 console.log('Delta content:', delta.content);
+
+                if (stream.controller.signal.aborted) {
+                  console.log('Stream aborted');
+                  break;
+                }
     
                 // Check if the current part ends with a sentence-ending punctuation
                 // After checking for sentence completion and adding it to sentences array
@@ -212,20 +221,21 @@ async function gptStreamingResponse(prompt, message) {
         }
       }
       // After the loop, check if there's a partial sentence left
-    if (currentSentence.trim()) {
-      let remainingSentence = currentSentence.trim();
-      sentences.push(remainingSentence);
+      if (currentSentence.trim()) {
+        let remainingSentence = currentSentence.trim();
+        sentences.push(remainingSentence);
 
-      // Send the remaining partial sentence
-      if (remainingSentence.length > 2000) {
-          let parts = splitResponse(remainingSentence);
-          for (const part of parts) {
-              await sendMessage(message.channel, part);
-          }
-      } else {
-          await sendMessage(message.channel, remainingSentence);
-      }
+        // Send the remaining partial sentence
+        if (remainingSentence.length > 2000) {
+            let parts = splitResponse(remainingSentence);
+            for (const part of parts) {
+                await sendMessage(message.channel, part);
+            }
+        } else {
+            await sendMessage(message.channel, remainingSentence);
+        }
   }
+  client.activeStreamController = null;
 
   // Return the collected sentences in case they are needed elsewhere
   return sentences;
