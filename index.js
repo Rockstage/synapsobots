@@ -9,9 +9,16 @@ const puppeteer = require('puppeteer-core');
 
 dotenv.config();
 
-const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
+let DISCORD_BOT_TOKEN;
+let DISCORD_APPLICATION_ID;
+if (process.env.NODE_ENV === 'development') {
+  DISCORD_BOT_TOKEN = process.env.DISCORD_DEV_BOT_TOKEN;
+  DISCORD_APPLICATION_ID = process.env.DISCORD_DEV_APPLICATION_ID;
+} else {
+  DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
+  DISCORD_APPLICATION_ID = process.env.DISCORD_APPLICATION_ID;
+}
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const DISCORD_APPLICATION_ID = process.env.DISCORD_APPLICATION_ID;
 const DISCORD_SERVER_ID = process.env.DISCORD_SERVER_ID;
 const openAiConfig = new Configuration({
     apiKey: OPENAI_API_KEY,
