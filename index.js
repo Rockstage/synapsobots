@@ -1,4 +1,4 @@
-const { Configuration, OpenAIApi } = require('openai');
+const OpenAI = require('openai').default;
 const { Client, Events, GatewayIntentBits, Collection, DiscordAPIError, PermissionsBitField } = require('discord.js');
 const dotenv = require('dotenv');
 const fs = require('node:fs');
@@ -18,11 +18,7 @@ if (process.env.NODE_ENV === 'development') {
   DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
   DISCORD_APPLICATION_ID = process.env.DISCORD_APPLICATION_ID;
 }
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const DISCORD_SERVER_ID = process.env.DISCORD_SERVER_ID;
-const openAiConfig = new Configuration({
-    apiKey: OPENAI_API_KEY,
-  });
 
 const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
@@ -169,15 +165,17 @@ client.once(Events.ClientReady, c => {
 
 // Handle GPT Request and Response
 async function gptResponse(prompt) {
-    const openai = new OpenAIApi(openAiConfig);
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY // This is also the default, can be omitted
+  });
     try {
-        const response = await openai.createChatCompletion({
+        const response = await openai.chat.completions.create({
             model: 'gpt-4-1106-preview', // 128,000 tokens context
             messages: prompt,
             // max_tokens: 2000,
             temperature: 0.3,
         });
-        return response.data.choices[0].message.content;
+        return response.choices[0].message.content;
     } catch (error) {
         console.log("OpenAI Api Error", error.response.data.error.message);
         return "My synapses misfired... Please try again."
