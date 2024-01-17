@@ -120,7 +120,7 @@ async function scrapeWebpage(url) {
 }
 
 // Generate GPT Prompt based on conversation history, user message, and channel topic
-const generatePrompt = async (channel, userMessage) => {
+const generatePrompt = async (channel, userMessage, thread) => {
   // Set GPT System Prompt as channel topic's text or scraped link
   let systemPrompt = channel.topic || "You are a helpful assistant.";
   let link;
@@ -143,9 +143,9 @@ const generatePrompt = async (channel, userMessage) => {
       deleteMessage(lastMessage);
     });
   }
-
-  // Get conversation history from channel
-  const fetchedMessages = await channel.messages.fetch({ limit: 100 });
+  // Get latest message from channel or 100 messages from thread history;
+  const fetchedMessages = await thread.messages.fetch({ limit: 100 });
+  const starterMessage = await thread.fetchStarterMessage();
 
   // Format conversation history
   const conversation = [
@@ -155,15 +155,18 @@ const generatePrompt = async (channel, userMessage) => {
     })),
   ];
 
-  // Add system prompt from channel topic and latest user message
-  conversation.push(
+  // Convert from discord to openai
+  conversation.reverse();
+
+  // Add system prompt from channel topic or link to the bottom of conversation history. Will persist even after 100 messages limit.
+  conversation.unshift(
     {
       role: "system",
       content: systemPrompt,
     },
     {
       role: "user",
-      content: userMessage,
+      content: starterMessage.content,
     }
   );
   return conversation;
@@ -176,8 +179,26 @@ client.once(Events.ClientReady, (c) => {
   isConnectedToDiscord = true;
 });
 
+async function createThread(message) {
+  const { channel, content } = message;
+  try {
+    let thread = await message.startThread({
+      name: content.slice(0, 100),
+      autoArchiveDuration: 1440,
+      reason: "Synapsobot Response",
+    });
+    // console.log('thread: ', thread);
+    return thread;
+  } catch (error) {
+    console.error(
+      "An error occurred while creating a thread or sending a message:",
+      error
+    );
+  }
+}
+
 // Handle GPT Request and Response
-async function gptStreamingResponse(prompt, message) {
+async function gptStreamingResponse(prompt, message, thread) {
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY, // Ensure this is correctly set
   });
@@ -192,7 +213,7 @@ async function gptStreamingResponse(prompt, message) {
 
     let sentences = [];
     let currentSentence = "";
-    const sentenceEndRegex = /[.!?](?=["']?$|\s*$)/;
+    const sentenceEndRegex = /\n/g; // /[.!?](?=["']?$|\s*$)/;
 
     // Set the activeStreamController on the client object
     client.activeStreamController = stream.controller;
@@ -224,15 +245,15 @@ async function gptStreamingResponse(prompt, message) {
             if (completeSentence.length > 2000) {
               let parts = splitResponse(completeSentence);
               for (const part of parts) {
-                await sendMessage(message.channel, part);
+                await sendMessage(message.channel, part, thread);
               }
             } else {
-              await sendMessage(message.channel, completeSentence);
+              await sendMessage(message.channel, completeSentence, thread);
             }
           }
         }
       } else {
-        console.log("Unexpected part structure:", part);
+        console.log("Unexpected part structure:", part, thread);
       }
     }
     // After the loop, check if there's a partial sentence left
@@ -244,10 +265,10 @@ async function gptStreamingResponse(prompt, message) {
       if (remainingSentence.length > 2000) {
         let parts = splitResponse(remainingSentence);
         for (const part of parts) {
-          await sendMessage(message.channel, part);
+          await sendMessage(message.channel, part, thread);
         }
       } else {
-        await sendMessage(message.channel, remainingSentence);
+        await sendMessage(message.channel, remainingSentence, thread);
       }
     }
     client.activeStreamController = null;
@@ -268,50 +289,50 @@ async function gptStreamingResponse(prompt, message) {
 }
 
 // Handle GPT Request and Response
-async function gptResponse(prompt, message) {
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY, // This is also the default, can be omitted
-  });
-  try {
-    sendMessage(message.channel, "Synapses tingling...");
-    const response = await openai.chat.completions.create({
-      model: "gpt-4-1106-preview", // 128,000 tokens context
-      messages: prompt,
-      // max_tokens: 2000,
-      temperature: 0.3,
-    });
-    const content = response.choices[0].message.content;
-    await message.channel.messages.fetch({ limit: 1 }).then((messages) => {
-      const lastMessage = messages.first();
-      deleteMessage(lastMessage);
-    });
+// async function gptResponse(prompt, message) {
+//   const openai = new OpenAI({
+//     apiKey: process.env.OPENAI_API_KEY, // This is also the default, can be omitted
+//   });
+//   try {
+//     sendMessage(message.channel, "Synapses tingling...");
+//     const response = await openai.chat.completions.create({
+//       model: "gpt-4-1106-preview", // 128,000 tokens context
+//       messages: prompt,
+//       // max_tokens: 2000,
+//       temperature: 0.3,
+//     });
+//     const content = response.choices[0].message.content;
+//     await message.channel.messages.fetch({ limit: 1 }).then((messages) => {
+//       const lastMessage = messages.first();
+//       deleteMessage(lastMessage);
+//     });
 
-    // Send response to Discord
-    if (content.length > 2000) {
-      let parts = splitResponse(content);
-      let delay = 0;
-      parts.forEach(async (part) => {
-        setTimeout(async () => {
-          sendMessage(message.channel, part);
-        }, delay);
-        delay += 1000;
-      });
-    } else {
-      sendMessage(message.channel, content);
-    }
-  } catch (error) {
-    if (error instanceof OpenAI.APIError) {
-      console.error(error.status); // e.g. 401
-      console.error(error.message); // e.g. The authentication token you passed was invalid...
-      console.error(error.code); // e.g. 'invalid_api_key'
-      console.error(error.type); // e.g. 'invalid_request_error'
-      return "My synapses misfired... Please try again.";
-    } else {
-      // Non-API error
-      console.log(error);
-    }
-  }
-}
+//     // Send response to Discord
+//     if (content.length > 2000) {
+//       let parts = splitResponse(content);
+//       let delay = 0;
+//       parts.forEach(async (part) => {
+//         setTimeout(async () => {
+//           sendMessage(message.channel, part);
+//         }, delay);
+//         delay += 1000;
+//       });
+//     } else {
+//       sendMessage(message.channel, content);
+//     }
+//   } catch (error) {
+//     if (error instanceof OpenAI.APIError) {
+//       console.error(error.status); // e.g. 401
+//       console.error(error.message); // e.g. The authentication token you passed was invalid...
+//       console.error(error.code); // e.g. 'invalid_api_key'
+//       console.error(error.type); // e.g. 'invalid_request_error'
+//       return "My synapses misfired... Please try again.";
+//     } else {
+//       // Non-API error
+//       console.log(error);
+//     }
+//   }
+// }
 
 function splitResponse(message, maxLength = 2000) {
   const parts = [];
@@ -331,9 +352,13 @@ function splitResponse(message, maxLength = 2000) {
   return parts;
 }
 
-async function sendMessage(channel, content) {
+async function sendMessage(channel, content, thread) {
   try {
-    await channel.send(content);
+    if (thread) {
+      await thread.send(content);
+    } else {
+      await channel.send(content);
+    }
   } catch (error) {
     if (
       error instanceof DiscordAPIError &&
@@ -373,8 +398,10 @@ client.on("messageCreate", async (message) => {
   const { channel, content } = message;
 
   try {
-    const prompt = await generatePrompt(channel, content);
-    await gptStreamingResponse(prompt, message);
+    let thread = channel.isThread() ? channel : await createThread(message); // Check if the channel is already a thread
+    const prompt = await generatePrompt(channel, content, thread);
+    // console.log("PROMPT : ", prompt);
+    await gptStreamingResponse(prompt, message, thread);
     return;
   } catch (error) {
     if (
