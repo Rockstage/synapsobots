@@ -145,7 +145,7 @@ const generatePrompt = async (channel, userMessage) => {
   }
 
   // Get conversation history from channel
-  const fetchedMessages = await channel.messages.fetch({ limit: 10 });
+  const fetchedMessages = await channel.messages.fetch({ limit: 100 });
 
   // Format conversation history
   const conversation = [
