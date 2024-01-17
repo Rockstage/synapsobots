@@ -164,22 +164,129 @@ client.once(Events.ClientReady, c => {
 });
 
 // Handle GPT Request and Response
-async function gptResponse(prompt) {
+async function gptStreamingResponse(prompt, message) {
+  const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY // Ensure this is correctly set
+  });
+
+  try {
+      const stream = await openai.chat.completions.create({
+          model: 'gpt-4-1106-preview',
+          messages: prompt,
+          temperature: 0.3,
+          stream: true,
+      });
+
+      let sentences = [];
+      let currentSentence = "";
+      const sentenceEndRegex = /[.!?](?=["']?$|\s*$)/;
+      for await (const part of stream) {
+        if (part.choices && part.choices.length > 0 && part.choices[0].hasOwnProperty('delta')) {
+            const delta = part.choices[0].delta;
+            if (delta && delta.content !== undefined) {
+                currentSentence += delta.content;
+                console.log('Delta content:', delta.content);
+    
+                // Check if the current part ends with a sentence-ending punctuation
+                // After checking for sentence completion and adding it to sentences array
+                if (sentenceEndRegex.test(currentSentence)) {
+                  let completeSentence = currentSentence.trim();
+                  sentences.push(completeSentence);
+                  currentSentence = "";
+
+                  // Check if the complete sentence is too long and split it if necessary
+                  if (completeSentence.length > 2000) {
+                      let parts = splitResponse(completeSentence);
+                      for (const part of parts) {
+                          await sendMessage(message.channel, part);
+                      }
+                  } else {
+                      await sendMessage(message.channel, completeSentence);
+                  }
+              }
+            } else {
+                console.log('Delta content is undefined');
+            }
+        } else {
+            console.log('Unexpected part structure:', part);
+        }
+      }
+      // After the loop, check if there's a partial sentence left
+    if (currentSentence.trim()) {
+      let remainingSentence = currentSentence.trim();
+      sentences.push(remainingSentence);
+
+      // Send the remaining partial sentence
+      if (remainingSentence.length > 2000) {
+          let parts = splitResponse(remainingSentence);
+          for (const part of parts) {
+              await sendMessage(message.channel, part);
+          }
+      } else {
+          await sendMessage(message.channel, remainingSentence);
+      }
+  }
+
+  // Return the collected sentences in case they are needed elsewhere
+  return sentences;
+    
+  } catch (error) {
+    if (error instanceof OpenAI.APIError) {
+      console.error(error.status);  // e.g. 401
+      console.error(error.message); // e.g. The authentication token you passed was invalid...
+      console.error(error.code);  // e.g. 'invalid_api_key'
+      console.error(error.type);  // e.g. 'invalid_request_error'
+    } else {
+      // Non-API error
+      console.log(error);
+    }
+  }
+}
+
+// Handle GPT Request and Response
+async function gptResponse(prompt, message) {
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY // This is also the default, can be omitted
   });
     try {
+        sendMessage(message.channel, "Synapses tingling...");
         const response = await openai.chat.completions.create({
             model: 'gpt-4-1106-preview', // 128,000 tokens context
             messages: prompt,
             // max_tokens: 2000,
             temperature: 0.3,
         });
-        return response.choices[0].message.content;
+        const content = response.choices[0].message.content;
+        await message.channel.messages.fetch({ limit: 1 }).then(messages => {
+          const lastMessage = messages.first();
+          deleteMessage(lastMessage);
+        });
+
+        // Send response to Discord
+        if (content.length > 2000) {
+          let parts = splitResponse(content);
+          let delay = 0;
+          parts.forEach(async (part) => {
+            setTimeout(async () => {
+              sendMessage(message.channel, part);
+            }, delay);
+            delay += 1000;
+          });
+        } else {
+          sendMessage(message.channel, content);
+        }
+
     } catch (error) {
-        console.log("OpenAI Api Error", error.response.data.error.message);
+      if (error instanceof OpenAI.APIError) {
+        console.error(error.status);  // e.g. 401
+        console.error(error.message); // e.g. The authentication token you passed was invalid...
+        console.error(error.code);  // e.g. 'invalid_api_key'
+        console.error(error.type);  // e.g. 'invalid_request_error'
         return "My synapses misfired... Please try again."
-        // throw error
+      } else {
+        // Non-API error
+        console.log(error);
+      }
     }
 }
 
@@ -236,27 +343,8 @@ client.on('messageCreate', async message => {
 
     try {
       const prompt = await generatePrompt(channel, content);
-      sendMessage(channel, "Synapses tingling...");
-      const response = await gptResponse(prompt);
-  
-      await message.channel.messages.fetch({ limit: 1 }).then(messages => {
-        const lastMessage = messages.first();
-        deleteMessage(lastMessage);
-      });
-  
-      // Send response to Discord
-      if (response.length > 2000) {
-        let parts = splitResponse(response);
-        let delay = 0;
-        parts.forEach(async (part) => {
-          setTimeout(async () => {
-            sendMessage(channel, part);
-          }, delay);
-          delay += 1000;
-        });
-      } else {
-        sendMessage(channel, response);
-      }
+      await gptStreamingResponse(prompt, message);
+      return;
     } catch (error) {
       if (error instanceof DiscordAPIError &&  (error.code === 50013 || error.code === 50001)) {
         console.log("Permissions error: ", error);
