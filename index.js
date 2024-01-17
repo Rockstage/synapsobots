@@ -165,9 +165,9 @@ async function gptResponse(prompt) {
     const openai = new OpenAIApi(openAiConfig);
     try {
         const response = await openai.createChatCompletion({
-            model: 'gpt-4',
+            model: 'gpt-4-1106-preview', // 128,000 tokens context
             messages: prompt,
-            max_tokens: 2000,
+            // max_tokens: 2000,
             temperature: 0.3,
         });
         return response.data.choices[0].message.content;
