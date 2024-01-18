@@ -188,7 +188,7 @@ async function createThread(message) {
   try {
     let thread = await message.startThread({
       name: content.slice(0, 100),
-      autoArchiveDuration: 1440,
+      autoArchiveDuration: 60,
       reason: "Synapsobot Response",
     });
     // console.log('thread: ', thread);
