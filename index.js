@@ -130,7 +130,6 @@ const generatePrompt = async (channel, userMessage, thread) => {
   if (channel.topic && channel.topic.match(/(https?:\/\/[^\s]+)/g)) {
     link = channel.topic.match(/(https?:\/\/[^\s]+)/g);
     try {
-      sendMessage(channel, "Synapses seeking...");
       const scrapedContent = await scrapeWebpage(link[0]);
       systemPrompt = scrapedContent;
     } catch (error) {
@@ -141,10 +140,6 @@ const generatePrompt = async (channel, userMessage, thread) => {
       });
       sendMessage(channel, "Scraping failed for <" + link[0] + ">...");
     }
-    await channel.messages.fetch({ limit: 1 }).then((messages) => {
-      const lastMessage = messages.first();
-      deleteMessage(lastMessage);
-    });
   }
   // Get latest message from channel or 100 messages from thread history;
   const fetchedMessages = await thread.messages.fetch({ limit: 100 });
@@ -402,6 +397,7 @@ client.on("messageCreate", async (message) => {
   const { channel, content } = message;
 
   try {
+    message.channel.sendTyping();
     let thread = channel.isThread() ? channel : await createThread(message); // Check if the channel is already a thread
     const prompt = await generatePrompt(channel, content, thread);
     // console.log("PROMPT : ", prompt);
