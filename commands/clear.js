@@ -4,39 +4,27 @@ const { MessageEmbed, EmbedBuilder, PermissionsBitField, PermissionFlagsBits } =
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('clear')
-        .setDescription('Clears all messages in the channel up to 14 days old, except pinned.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+        .setDescription('WARNING: Clears all threads and messages in the channel up to 14 days old, except pinned.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages | PermissionFlagsBits.ManageThreads),
     // permissions: ['MANAGE_MESSAGES'],
     async execute(interaction) {
         const { channel } = interaction;
         // if(!interaction.memberPermissions.has(PermissionsBitField.Flags.UseApplicationCommands)) return;
         await interaction.reply({ content: "Clearing messages...", ephemeral: true, fetchReply: true });
-
-        // Delete one by one
-        // try {
-        //     let fetched;
-        //     let messageCount = 0;
-        //     do {
-        //         fetched = await channel.messages.fetch({ limit: 100 });
-        //         const messagesToDelete = fetched.filter(message => !message.pinned);
-
-        //         // Break the loop if there are no more messages to delete
-        //         if (messagesToDelete.size === 0) {
-        //             break;
-        //         }
-
-        //         messageCount += messagesToDelete.size;
-        //         for (const message of messagesToDelete.values()) {
-        //             await message.delete().catch(error => console.error('Error while deleting message:', error));
-        //         }
-        //     } while (fetched.size >= 0);
-        //     await interaction.editReply({ content: `Cleared ${messageCount} messages`, ephemeral: true });
-        // } catch (error) {
-        //     console.log("Error while clearing messages:", error);
-        //     interaction.editReply({ content: "Error while clearing messages", ephemeral: true });
-        // }
-        
-        // Bulk delete method - doesn't clear messages older than 14 days
+        // Bulk delete method - doesn't clear messages/threads older than 14 days
+        // Delete all threads in the current channel
+        try {
+            const fetchedThreads = await channel.threads.fetchActive(); // This should only fetch threads in 'channel'
+            fetchedThreads.threads.forEach(async (thread) => {
+                if (thread.parentId === channel.id) { // Check if the thread's parent channel ID matches the current channel ID
+                    await thread.delete();
+                    // console.log(`Deleted thread: ${thread.name}`);
+                }
+            });
+        } catch (error) {
+            console.error('An error occurred while deleting threads:', error);
+        }
+        // Delete all messages
         try {
             const messages = await channel.messages.fetch({ limit: 100 });
             const messagesToDelete = messages.filter(message => !message.pinned);
@@ -47,7 +35,7 @@ module.exports = {
                 interaction.editReply({ content: "I don't have the permission to clear messages.", ephemeral: true });
                 return;
             } else {
-                console.log("Error while clearing messages:", error); // Update this line for better logging
+                console.error("Error while clearing messages:", error); // Update this line for better logging
                 interaction.editReply({ content: "Error while clearing messages", ephemeral: true });
             }
         }
