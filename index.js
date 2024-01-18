@@ -16,9 +16,11 @@ const puppeteer = require("puppeteer-core");
 
 dotenv.config();
 
+let DEV = process.env.NODE_ENV === "development" ? true : false;
+
 let DISCORD_BOT_TOKEN;
 let DISCORD_APPLICATION_ID;
-if (process.env.NODE_ENV === "development") {
+if (DEV) {
   DISCORD_BOT_TOKEN = process.env.DISCORD_DEV_BOT_TOKEN;
   DISCORD_APPLICATION_ID = process.env.DISCORD_DEV_APPLICATION_ID;
 } else {
@@ -124,6 +126,7 @@ const generatePrompt = async (channel, userMessage, thread) => {
   // Set GPT System Prompt as channel topic's text or scraped link
   let systemPrompt = channel.topic || "You are a helpful assistant.";
   let link;
+  DEV && console.log("2. Generating Prompt and Conversation History...");
   if (channel.topic && channel.topic.match(/(https?:\/\/[^\s]+)/g)) {
     link = channel.topic.match(/(https?:\/\/[^\s]+)/g);
     try {
@@ -181,6 +184,7 @@ client.once(Events.ClientReady, (c) => {
 
 async function createThread(message) {
   const { channel, content } = message;
+  DEV && console.log("3. Creating Thread...");
   try {
     let thread = await message.startThread({
       name: content.slice(0, 100),
@@ -202,7 +206,7 @@ async function gptStreamingResponse(prompt, message, thread) {
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY, // Ensure this is correctly set
   });
-
+  DEV && console.log("4. OpenAI Request...");
   try {
     const stream = await openai.chat.completions.create({
       model: "gpt-4-1106-preview",
@@ -217,7 +221,7 @@ async function gptStreamingResponse(prompt, message, thread) {
 
     // Set the activeStreamController on the client object
     client.activeStreamController = stream.controller;
-
+    DEV && console.log("5. Streaming OpenAI Response...");
     for await (const part of stream) {
       if (
         part.choices &&
@@ -392,7 +396,7 @@ client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
   if (process.env.NODE_ENV === "development") {
-    console.log("User Message: ", message.content);
+    console.log("1. User Message Received: ", message.content);
   }
 
   const { channel, content } = message;
@@ -402,6 +406,7 @@ client.on("messageCreate", async (message) => {
     const prompt = await generatePrompt(channel, content, thread);
     // console.log("PROMPT : ", prompt);
     await gptStreamingResponse(prompt, message, thread);
+    DEV && console.log("6. Open AI Response Confirmed.");
     return;
   } catch (error) {
     if (
