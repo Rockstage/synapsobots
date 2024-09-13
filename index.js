@@ -204,9 +204,9 @@ async function gptStreamingResponse(prompt, message, thread) {
   DEV && console.log("4. OpenAI Request...");
   try {
     const stream = await openai.chat.completions.create({
-      model: "gpt-4-1106-preview",
+      model: process.env.GPT_MODEL || "gpt-4o",
       messages: prompt,
-      temperature: 0.3,
+      temperature: process.env.GPT_TEMP || 0.3,
       stream: true,
     });
 
