@@ -172,7 +172,7 @@ const generatePrompt = async (channel, userMessage, thread) => {
     conversation.unshift(
       {
         role: "user",
-        content: userMessage,
+        content: systemPrompt + "; Question related to the provided context: " + userMessage,
       }
     )
   )
