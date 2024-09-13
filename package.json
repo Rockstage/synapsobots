@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
-    "heroku-postbuild": "npm install puppeteer@18.2.1"
+    "deploy-commands": "node deploy-commands.js",
+    "heroku-postbuild": "npm install puppeteer@18.2.1 && npm run deploy-commands"
   },
   "author": "George Petrov",
   "license": "ISC",
