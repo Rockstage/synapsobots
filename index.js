@@ -13,6 +13,7 @@ const path = require("node:path");
 const cheerio = require("cheerio");
 const axios = require("axios");
 const puppeteer = require("puppeteer-core");
+const { createThread } = require("./utils.js");
 
 dotenv.config();
 
@@ -126,6 +127,7 @@ const generatePrompt = async (channel, userMessage, thread) => {
   // Set GPT System Prompt as channel topic's text or scraped link
   let systemPrompt = channel.topic || "You are a helpful assistant.";
   let link;
+  let isReasoning = thread.name.startsWith("!");
   DEV && console.log("2. Generating Prompt and Conversation History...");
   if (channel.topic && channel.topic.match(/(https?:\/\/[^\s]+)/g)) {
     link = channel.topic.match(/(https?:\/\/[^\s]+)/g);
@@ -157,7 +159,7 @@ const generatePrompt = async (channel, userMessage, thread) => {
   conversation.reverse();
 
   // Add system prompt from channel topic or link to the bottom of conversation history. Will persist even after 100 messages limit.
-  conversation.unshift(
+  !isReasoning ? conversation.unshift(
     {
       role: "system",
       content: systemPrompt,
@@ -166,7 +168,14 @@ const generatePrompt = async (channel, userMessage, thread) => {
       role: "user",
       content: starterMessage.content,
     }
-  );
+  ) : (
+    conversation.unshift(
+      {
+        role: "user",
+        content: userMessage,
+      }
+    )
+  )
   return conversation;
 };
 
@@ -177,36 +186,73 @@ client.once(Events.ClientReady, (c) => {
   isConnectedToDiscord = true;
 });
 
-async function createThread(message) {
-  const { channel, content } = message;
-  DEV && console.log("3. Creating Thread...");
+async function gptReasoningResponse(prompt, message, thread, model = process.env.REASONING_MODEL || "o1-preview") {
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY, // Ensure this is correctly set
+  });
+
+  DEV && console.log("4. OpenAI Request with ", model);
+
   try {
-    let thread = await message.startThread({
-      name: content.slice(0, 100),
-      autoArchiveDuration: 60,
-      reason: "Synapsobot Response",
+    const response = await openai.chat.completions.create({
+      model: model,
+      messages: prompt,
     });
-    // console.log('thread: ', thread);
-    return thread;
+
+    const reasoning = response.choices[0].message.content;
+
+    let sentences = [];
+    let currentSentence = "";
+    const sentenceEndRegex = /[.!?](?=["']?$|\s*$)/;
+
+    reasoning.split(sentenceEndRegex).forEach(sentence => {
+      currentSentence += sentence;
+      if (sentenceEndRegex.test(sentence)) {
+        sentences.push(currentSentence.trim());
+        currentSentence = "";
+      }
+    });
+
+    if (currentSentence) {
+      sentences.push(currentSentence.trim());
+    }
+
+    DEV && console.log("5. Streaming OpenAI Response...");
+
+    if (sentences.join(" ").length > 2000) {
+      let parts = splitResponse(sentences.join(" "));
+      for (const part of parts) {
+        await sendMessage(message.channel, part, thread);
+      }
+    } else {
+      await sendMessage(message.channel, sentences.join(" "), thread);
+    }
+
+    return sentences;
   } catch (error) {
-    console.error(
-      "An error occurred while creating a thread or sending a message:",
-      error
-    );
+    if (error instanceof OpenAI.APIError) {
+      console.error(error.status); // e.g. 401
+      console.error(error.message); // e.g. The authentication token you passed was invalid...
+      console.error(error.code); // e.g. 'invalid_api_key'
+      console.error(error.type); // e.g. 'invalid_request_error'
+    } else {
+      // Non-API error
+      console.log(error);
+    }
   }
 }
 
 // Handle GPT Request and Response
-async function gptStreamingResponse(prompt, message, thread) {
+async function gptStreamingResponse(prompt, message, thread, model = process.env.GPT_MODEL || "gpt-4o") {
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY, // Ensure this is correctly set
   });
-  DEV && console.log("4. OpenAI Request...");
+  DEV && console.log("4. OpenAI Request with ", model);
   try {
     const stream = await openai.chat.completions.create({
-      model: process.env.GPT_MODEL || "gpt-4o",
+      model,
       messages: prompt,
-      temperature: process.env.GPT_TEMP || 0.3,
+      temperature: Number(process.env.GPT_TEMP) || 0.8,
       stream: true,
     });
 
@@ -399,9 +445,10 @@ client.on("messageCreate", async (message) => {
   try {
     message.channel.sendTyping();
     let thread = channel.isThread() ? channel : await createThread(message); // Check if the channel is already a thread
+    let isReasoning = thread.name.startsWith("!");
     const prompt = await generatePrompt(channel, content, thread);
     // console.log("PROMPT : ", prompt);
-    await gptStreamingResponse(prompt, message, thread);
+    !isReasoning ? await gptStreamingResponse(prompt, message, thread) : await gptReasoningResponse(prompt, message, thread)
     DEV && console.log("6. Open AI Response Confirmed.");
     return;
   } catch (error) {
