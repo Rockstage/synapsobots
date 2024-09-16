@@ -98,13 +98,15 @@ async function scrapeWebpage(url) {
   try {
     const browser = await puppeteer.launch({
       headless: true,
-      dumpio: true,
+      executablePath: process.env.CHROME_BIN, // Use the Chrome executable provided by the buildpack
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
+        // "--disable-gpu",
+        // "--no-zygote",
+        // "--single-process",
       ],
-      // executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
     });
     const page = await browser.newPage();
     // page && console.log("Page scraped");
