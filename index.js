@@ -97,7 +97,7 @@ async function scrapeWebpage(url) {
   console.log("3. Scraping ", url);
   try {
     const browser = await puppeteer.launch({
-      // headless: false,
+      headless: true,
       dumpio: true,
       args: [
         "--no-sandbox",
