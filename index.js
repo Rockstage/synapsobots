@@ -97,7 +97,7 @@ async function scrapeWebpage(url) {
   console.log("3. Scraping ", url);
   try {
     const browser = await puppeteer.launch({
-      // headless: true,
+      headless: true,
       // executablePath: process.env.CHROME_BIN, // Use the Chrome executable provided by the buildpack
       args: [
         "--no-sandbox",
@@ -105,7 +105,7 @@ async function scrapeWebpage(url) {
         "--disable-dev-shm-usage",
         // "--single-process", // causes error with browser in local. Was enabled on last heroku.
       ],
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
     });
     const page = await browser.newPage();
     // page && console.log("Page scraped");
