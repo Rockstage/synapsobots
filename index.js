@@ -103,7 +103,7 @@ async function scrapeWebpage(url) {
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
-        "--single-process", // causes error with browser in local. Was enabled on last heroku.
+        // "--single-process", // causes error with browser in local. Was enabled on last heroku.
       ],
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
     });
