@@ -93,29 +93,44 @@ const rest = new REST({ version: "9" }).setToken(token);
 
 // Scrape
 async function scrapeWebpage(url) {
+  console.log("3. Scraping ", url);
   try {
     const browser = await puppeteer.launch({
+      // headless: false,
+      dumpio: true,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
-        "--single-process",
       ],
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
+      // executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
     });
     const page = await browser.newPage();
+    // page && console.log("Page scraped");
 
-    await page.goto(url, { waitUntil: "networkidle2" });
+    // page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+    // page.on('error', (err) => console.error('PAGE ERROR:', err));
+    // page.on('pageerror', (pageErr) => console.error('PAGEPAGE ERROR:', pageErr));
 
-    const content = await page.evaluate((url) => {
-      if (url.includes("notion")) {
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 0 });
+    // page && console.log("Page go to");
+
+    await page.waitForSelector('.notion-page-content', { timeout: 0 });
+    // page && console.log("Selector waited for ", url);
+
+    let content;
+    if(url.includes("notion")) {
+      content = await page.evaluate(() => {
         return document.querySelector(".notion-page-content").innerText;
-      }
-      return document.querySelector("body").innerText;
-    }, url);
+      });
+    } else {
+      content = await page.evaluate(() => {
+        return document.querySelector("body").innerText;
+      });
+    }
 
     await browser.close();
-    return content;
+    return content ? content : "You are a helpful assistant. Start by tell the user that the webpage scraping failed!";
   } catch (error) {
     console.error(`Error fetching webpage: ${error.message}`);
     return null;
