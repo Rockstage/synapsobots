@@ -91,6 +91,7 @@ const rest = new REST({ version: "9" }).setToken(token);
   }
 })();
 
+
 // Scrape
 async function scrapeWebpage(url) {
   console.log("3. Scraping ", url);
